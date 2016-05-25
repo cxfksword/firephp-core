@@ -1062,6 +1062,11 @@ class FirePHP {
             $msg = '[' . $this->jsonEncode($msgMeta) . ',' . $this->jsonEncode($object, $skipFinalObjectEncode) . ']';
         }
         
+        if (isset($_SERVER['HTTP_X_FIREPHP_ENCODING']) && $_SERVER['HTTP_X_FIREPHP_ENCODING'] == 'zlib-deflate') {
+            $this->setHeader('X-FirePHP-Encoding', 'zlib-deflate');
+            $msg = base64_encode(zlib_encode($msg, ZLIB_ENCODING_DEFLATE));
+        }
+        
         $parts = explode("\n", chunk_split($msg, 5000, "\n"));
 
         for ($i = 0; $i < count($parts); $i++) {
