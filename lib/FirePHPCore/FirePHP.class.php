@@ -51,8 +51,9 @@ if (!defined('E_DEPRECATED')) {
 }
 if (!defined('E_USER_DEPRECATED')) {
     define('E_USER_DEPRECATED', 16384);
-} 
- 
+}
+
+
 /**
  * Sends the given data to the FirePHP Firefox Extension.
  * The data can be displayed in the Firebug Console or in the
@@ -65,7 +66,7 @@ if (!defined('E_USER_DEPRECATED')) {
  * @license         [MIT License](http://www.opensource.org/licenses/mit-license.php)
  * @package         FirePHPCore
  */
-class FirePHP {
+class FirePHPCore {
 
     /**
      * FirePHP version
@@ -195,15 +196,29 @@ class FirePHP {
      * @var integer
      */
     protected $messageIndex = 1;
-    
+
+    /**
+     * sended header size
+     * @var integer
+     */
+    protected static $hasSendedHeaderSize = 0;
+
+    /**
+     * sended header size
+     * @var integer
+     */
+    protected static $blockSendHeader = false;
+
     /**
      * Options for the library
-     * 
+     *
+     * maxHeaderSize: for ignore exceed nginx max response header 502 error, see nginx's configuration 'fastcgi_buffer_size','fastcgi_buffers'
      * @var array
      */
     protected $options = array('maxDepth' => 10,
                                'maxObjectDepth' => 5,
                                'maxArrayDepth' => 5,
+                               'maxHeaderSize' => -1, // bytes,
                                'useNativeJsonEncode' => true,
                                'includeLineNumbers' => true);
 
@@ -229,7 +244,7 @@ class FirePHP {
      * 
      * @var boolean
      */
-    protected $enabled = true;
+    protected $enabled = false;
 
     /**
      * The insight console to log to if applicable
@@ -519,7 +534,7 @@ class FirePHP {
           }
         
         } else {
-            $this->fb($code, 'Assertion Failed', FirePHP::ERROR, array('File' => $file, 'Line' => $line));
+            $this->fb($code, 'Assertion Failed', FirePHPCore::ERROR, array('File' => $file, 'Line' => $line));
         }
     }
   
@@ -551,7 +566,7 @@ class FirePHP {
             }
         }
 
-        return $this->fb(null, $name, FirePHP::GROUP_START, $options);
+        return $this->fb(null, $name, FirePHPCore::GROUP_START, $options);
     }
   
     /**
@@ -562,13 +577,13 @@ class FirePHP {
      */
     public function groupEnd()
     {
-        return $this->fb(null, null, FirePHP::GROUP_END);
+        return $this->fb(null, null, FirePHPCore::GROUP_END);
     }
 
     /**
      * Log object with label to firebug console
      *
-     * @see FirePHP::LOG
+     * @see FirePHPCore::LOG
      * @param mixes $object
      * @param string $label
      * @return true
@@ -576,13 +591,13 @@ class FirePHP {
      */
     public function log($object, $label = null, $options = array())
     {
-        return $this->fb($object, $label, FirePHP::LOG, $options);
+        return $this->fb($object, $label, FirePHPCore::LOG, $options);
     } 
 
     /**
      * Log object with label to firebug console
      *
-     * @see FirePHP::INFO
+     * @see FirePHPCore::INFO
      * @param mixes $object
      * @param string $label
      * @return true
@@ -590,13 +605,13 @@ class FirePHP {
      */
     public function info($object, $label = null, $options = array())
     {
-        return $this->fb($object, $label, FirePHP::INFO, $options);
+        return $this->fb($object, $label, FirePHPCore::INFO, $options);
     } 
 
     /**
      * Log object with label to firebug console
      *
-     * @see FirePHP::WARN
+     * @see FirePHPCore::WARN
      * @param mixes $object
      * @param string $label
      * @return true
@@ -604,13 +619,13 @@ class FirePHP {
      */
     public function warn($object, $label = null, $options = array())
     {
-        return $this->fb($object, $label, FirePHP::WARN, $options);
+        return $this->fb($object, $label, FirePHPCore::WARN, $options);
     } 
 
     /**
      * Log object with label to firebug console
      *
-     * @see FirePHP::ERROR
+     * @see FirePHPCore::ERROR
      * @param mixes $object
      * @param string $label
      * @return true
@@ -618,13 +633,13 @@ class FirePHP {
      */
     public function error($object, $label = null, $options = array())
     {
-        return $this->fb($object, $label, FirePHP::ERROR, $options);
+        return $this->fb($object, $label, FirePHPCore::ERROR, $options);
     } 
 
     /**
      * Dumps key and variable to firebug server panel
      *
-     * @see FirePHP::DUMP
+     * @see FirePHPCore::DUMP
      * @param string $key
      * @param mixed $variable
      * @return true
@@ -641,26 +656,26 @@ class FirePHP {
         if (!preg_match_all('/^[a-zA-Z0-9-_\.:]*$/', $key, $m)) {
             throw $this->newException('Key passed to dump() contains invalid characters [a-zA-Z0-9-_\.:]');
         }
-        return $this->fb($variable, $key, FirePHP::DUMP, $options);
+        return $this->fb($variable, $key, FirePHPCore::DUMP, $options);
     }
   
     /**
      * Log a trace in the firebug console
      *
-     * @see FirePHP::TRACE
+     * @see FirePHPCore::TRACE
      * @param string $label
      * @return true
      * @throws Exception
      */
     public function trace($label)
     {
-        return $this->fb($label, FirePHP::TRACE);
+        return $this->fb($label, FirePHPCore::TRACE);
     } 
 
     /**
      * Log a table in the firebug console
      *
-     * @see FirePHP::TABLE
+     * @see FirePHPCore::TABLE
      * @param string $label
      * @param string $table
      * @return true
@@ -668,7 +683,7 @@ class FirePHP {
      */
     public function table($label, $table, $options = array())
     {
-        return $this->fb($table, $label, FirePHP::TABLE, $options);
+        return $this->fb($table, $label, FirePHPCore::TABLE, $options);
     }
 
     /**
@@ -680,7 +695,7 @@ class FirePHP {
     {
         $instance = self::getInstance();
         if (!method_exists($instance, '_to')) {
-            throw new Exception('FirePHP::to() implementation not loaded');
+            throw new Exception('FirePHPCore::to() implementation not loaded');
         }
         $args = func_get_args();
         return call_user_func_array(array($instance, '_to'), $args);
@@ -695,7 +710,7 @@ class FirePHP {
     {
         $instance = self::getInstance();
         if (!method_exists($instance, '_plugin')) {
-            throw new Exception('FirePHP::plugin() implementation not loaded');
+            throw new Exception('FirePHPCore::plugin() implementation not loaded');
         }
         $args = func_get_args();
         return call_user_func_array(array($instance, '_plugin'), $args);
@@ -1061,10 +1076,24 @@ class FirePHP {
             }
             $msg = '[' . $this->jsonEncode($msgMeta) . ',' . $this->jsonEncode($object, $skipFinalObjectEncode) . ']';
         }
-        
+
+
         if (isset($_SERVER['HTTP_X_FIREPHP_ENCODING']) && $_SERVER['HTTP_X_FIREPHP_ENCODING'] == 'zlib-deflate') {
-            $this->setHeader('X-FirePHP-Encoding', 'zlib-deflate');
-            $msg = base64_encode(zlib_encode($msg, ZLIB_ENCODING_DEFLATE));
+             $this->setHeader('X-FirePHP-Encoding', 'zlib-deflate');
+             $msg = base64_encode(zlib_encode($msg, ZLIB_ENCODING_DEFLATE));
+        }
+
+        // check exceed max nginx response header size
+        self::$hasSendedHeaderSize += strlen($msg);
+        if ($this->options['maxHeaderSize'] > 0 && self::$hasSendedHeaderSize > $this->options['maxHeaderSize']) {
+            if (strlen($msg) > 1000) {
+                self::$hasSendedHeaderSize -= strlen($msg);
+                $args = func_get_args();
+                $args[0] = '** Data too long **';
+                $args[2] = self::WARN;
+                call_user_func_array(array($this, 'fb'), $args);
+            }
+            return false;
         }
         
         $parts = explode("\n", chunk_split($msg, 5000, "\n"));
@@ -1833,7 +1862,7 @@ class FirePHP {
      */
     public function setProcessorUrl($URL)
     {
-        trigger_error('The FirePHP::setProcessorUrl() method is no longer supported', E_USER_DEPRECATED);
+        trigger_error('The FirePHPCore::setProcessorUrl() method is no longer supported', E_USER_DEPRECATED);
     }
 
     /**
@@ -1841,6 +1870,6 @@ class FirePHP {
      */
     public function setRendererUrl($URL)
     {
-        trigger_error('The FirePHP::setRendererUrl() method is no longer supported', E_USER_DEPRECATED);
+        trigger_error('The FirePHPCore::setRendererUrl() method is no longer supported', E_USER_DEPRECATED);
     }
 }
