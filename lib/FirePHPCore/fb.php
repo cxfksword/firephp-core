@@ -133,7 +133,16 @@ class FB
     {
         return FirePHP::getInstance(true)->getOptions();
     }
-
+    
+    /**
+     * check firephp client opened
+     * @return boolean
+     */
+    public static function detectClientExtension()
+    {
+        return FirePHP::getInstance(true)->detectClientExtension();
+    }
+    
     /**
      * Log object to firebug
      * 
